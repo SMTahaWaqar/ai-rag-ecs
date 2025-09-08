@@ -2,6 +2,7 @@ import logging
 from fastapi import FastAPI
 from pydantic import BaseModel
 from .logging_middleware import RequestLogginMiddleware
+from .db_health import router as db_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -11,6 +12,7 @@ logger = logging.getLogger("rag")
 
 app = FastAPI(title="Docs Q&A (RAG) API", version="0.1.0")
 app.add_middleware(RequestLogginMiddleware)
+app.include_router(db_router)
 
 class AskRequest (BaseModel):
     question: str

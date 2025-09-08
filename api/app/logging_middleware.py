@@ -21,16 +21,8 @@ class RequestLogginMiddleware(BaseHTTPMiddleware):
             raise
         finally:
             duration_ms = round((time.perf_counter() - start) * 1000, 2)
-            logger.info(
-                "req",
-                extra={
-                    "request_id": request_id,
-                    "method": request.method,
-                    "path": request.url.path,
-                    "status": status,
-                    "duration_ms": duration_ms,
-                }
-            )
+            logger.info("req method=%s path=%s status=%s duration_ms=%.2f request_id=%s",
+    request.method, request.url.path, status, duration_ms, request_id)
         
         response.headers["X-Request-ID"] = request_id
         return response
