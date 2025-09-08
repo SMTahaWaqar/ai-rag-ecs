@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from .db import connect
@@ -10,9 +10,10 @@ router = APIRouter()
 EMBED_DIM = int(os.environ.get("EMBEDDING_DIM", "384"))
 
 class IngestReq(BaseModel):
-    text: str = Field(..., description="Raw document text")
+    text: str
     chunk_size: int = 600
     overlap: int = 100
+    doc_id: Optional[str] = "default"
 
 class IngestResp(BaseModel):
     chunks_saved: int
@@ -23,17 +24,25 @@ def ingest(req: IngestReq):
     if not chunks:
         return IngestResp(chunks_saved=0)
     
+    inserted = 0
     with connect() as conn:
         with conn.cursor() as cur:
             for ch in chunks:
                 vec = embed_text(ch)
                 vec_sql = to_vector_sql(vec)
                 cur.execute(
-                    "INSERT INTO docs (chunk, embedding) VALUES (%s, %s::vector)",
-                    (ch, vec_sql),
-                )
+                    """
+                    INSERT INTO docs (doc_id, chunk, embedding)
+                    SELECT %s, %s, %s::vector
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM docs WHERE doc_id = %s AND chunk = %s
+                    )
+                """,
+                (req.doc_id, ch, vec_sql, req.doc_id, ch),
+            )
+            inserted += cur.rowcount
         conn.commit()
-    return IngestResp(chunks_saved=len(chunks))
+    return IngestResp(chunks_saved=inserted)
 
 class SearchReq(BaseModel):
     query: str
