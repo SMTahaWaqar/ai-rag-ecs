@@ -8,6 +8,8 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
+      - name: Compute image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
       - name: Build images
         run: |
           IMAGE=ghcr.io/${{ github.repository }}
