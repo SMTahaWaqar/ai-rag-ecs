@@ -1,4 +1,6 @@
+# docker-compose.yml  (root of ai-rag-ecs)
 version: "3.8"
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -7,6 +9,20 @@ services:
       POSTGRES_USER: rag
       POSTGRES_PASSWORD: rag
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - ./infra/pg/init:/docker-entrypoint-initdb.d
+
+  pgweb:
+    image: sosedoff/pgweb
+    environment:
+      - DATABASE_URL=postgres://rag:rag@db:5432/rag?sslmode=disable
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      - db
+  
+  api:
+    build: ./api
+    env_file:
+      - ./.env
