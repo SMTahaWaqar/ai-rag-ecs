@@ -9,7 +9,7 @@ _model = None
 
 def _init_model():
     global _model
-    if PROVIDER == "fastemebed" and _model is None:
+    if PROVIDER == "fastembed" and _model is None:
         from fastembed import TextEmbedding
         _model = TextEmbedding(model_name=MODEL_NAME)
 

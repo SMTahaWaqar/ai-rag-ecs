@@ -1,60 +1,72 @@
-import os, json
+import os
 from typing import Optional
 
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "").lower()
-LLM_MODEL = os.environ.get("LLM_MODEL", "phi3:mini")
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "").lower()  # "openai" | "ollama"
+LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+SYSTEM_PROMPT = (
+    "You are a precise RAG assistant. Use ONLY the provided context chunks.\n"
+    'If the answer is not clearly present, say "I don\'t know". Keep answers concise.'
+)
 
 def _build_prompt(question: str, context: str) -> str:
     return (
-        "You are a helpful assistant. Answer using ONLY the provided context.\n"
-        "If the answer isn't clearly in the context, say you don't know.\n\n"
+        f"{SYSTEM_PROMPT}\n\n"
         f"Question: {question}\n\n"
-        f"Context: {context}\n\n"
-        "Answer (concise, with no new facts):"
+        "Context chunks (bullet list):\n"
+        f"{context}\n\n"
+        "Answer:"
     )
 
 def call_llm(question: str, context: str) -> Optional[str]:
     """
-    Returns model answer string or None if provider not configured or call fails.
+    Return an answer string or None on any issue.
+    Tries OpenAI if configured; if that fails and Ollama is configured, tries Ollama.
     """
-
     prompt = _build_prompt(question, context)
 
-    if not LLM_PROVIDER:
-        return None
+    if LLM_PROVIDER == "openai":
+        try:
+            from openai import OpenAI
+            client = OpenAI()
+            resp = client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+            )
+            text = resp.choices[0].message.content or ""
+            return text.strip() or None
+        except Exception:
+            pass
 
-    try:
-        if LLM_PROVIDER == "ollama":
-            try:
-                import os, requests
-            except ModuleNotFoundError:
-                return None
-            
-            num_ctx = int(os.environ.get("OLLAMA_NUM_CTX", "1024"))    # smaller = less RAM & faster
-            num_thread = int(os.environ.get("OLLAMA_NUM_THREAD", max(1, (os.cpu_count() or 4) // 2)))
-            keep_alive = os.environ.get("OLLAMA_KEEP_ALIVE", "10m")    # keep model in RAM for 10min idle
+    if LLM_PROVIDER == "ollama":
+        try:
+            import requests
+        except ModuleNotFoundError:
+            return None
+        try:
             r = requests.post(
                 f"{OLLAMA_BASE_URL}/api/generate",
                 json={
                     "model": LLM_MODEL,
                     "prompt": prompt,
+                    "system": SYSTEM_PROMPT,
                     "stream": False,
                     "options": {
-                        "num_ctx": num_ctx,
-                        "num_thread": num_thread,
-                        # small sampling tweaks help stability/consistency; not required for speed
-                        "temperature": 0.1
+                        "num_ctx": int(os.environ.get("OLLAMA_NUM_CTX", "768")),
+                        "num_thread": int(os.environ.get("OLLAMA_NUM_THREAD", "4")),
+                        "temperature": 0.1,
                     },
-                    "keep_alive": keep_alive
+                    "keep_alive": os.environ.get("OLLAMA_KEEP_ALIVE", "10m"),
                 },
                 timeout=120,
             )
             if not r.ok:
                 return None
             text = r.json().get("response", "")
-            return text.strip() if isinstance(text, str) else None
-    except Exception as e:
-        return None
-    
-    return ModuleNotFoundError
+            return text.strip() or None
+        except Exception:
+            return None
+
+    return None

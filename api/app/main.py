@@ -10,6 +10,7 @@ from .ingest_search import router as rag_router
 from .bootstrap import ensure_schema
 from .ask import router as ask_router, warm_router
 from .llm import call_llm
+from fastapi.middleware.cors import CORSMiddleware
 
 env_file = os.getenv("ENV_FILE")
 if env_file:
@@ -29,6 +30,14 @@ logging.basicConfig(
 logger = logging.getLogger("rag")
 ensure_schema()
 app = FastAPI(title="Docs Q&A (RAG) API", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # or ["http://localhost:3000"]
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.add_middleware(RequestLogginMiddleware)
 app.include_router(db_router)
 app.include_router(rag_router)
